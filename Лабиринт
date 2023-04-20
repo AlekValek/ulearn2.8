@@ -1,0 +1,102 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Greedy.Architecture;
+using System.Drawing;
+
+namespace Greedy
+{
+    public class DijkstraData
+    {
+        public Point PreviousInCell { get; set; }
+        public double Price { get; set; }
+    }
+
+    public class DijkstraPathFinder
+    {    
+        private static IEnumerable<PathWithCost> DoDijkstra(State state, List<Point> notVisited, Dictionary<Point, DijkstraData> track, List<Point> chest, Point[] directions)
+        {
+            while (true)
+            {
+                var toOpen = new Point(-1, -1);
+                var bestPrice = double.PositiveInfinity;
+
+                foreach (var element in notVisited)
+                    if (track.ContainsKey(element) && track[element].Price < bestPrice)
+                    {
+                        bestPrice = track[element].Price;
+                        toOpen = element;
+                    }
+
+                if (toOpen == new Point(-1, -1))
+                    yield break;
+                var neighbours = GetNeighbours(toOpen, state, directions);
+                foreach (var neighbour in neighbours)
+                {
+                    var currentPrice = track[toOpen].Price + state.CellCost[neighbour.X, neighbour.Y];
+                    var nextPoint = neighbour;
+                    if (!(track.ContainsKey(nextPoint) && track[nextPoint].Price <= currentPrice))
+                        track[nextPoint] = new DijkstraData { Price = currentPrice, PreviousInCell = toOpen };
+                }
+                notVisited.Remove(toOpen);
+
+                foreach (var element in GetPathWithPoints(chest, toOpen, track))
+                    yield return element;
+            }
+        }
+
+        public IEnumerable<PathWithCost> GetPathsByDijkstra(State state, Point start,
+        IEnumerable<Point> targets)
+        {         
+            var notVisit = new List<Point>();
+            for (var dx = 0; dx < state.MapWidth; dx++)
+                for (var dy = 0; dy < state.MapHeight; dy++)
+                    notVisit.Add(new Point(dx, dy));
+            var road = new Dictionary<Point, DijkstraData>
+            {
+                [start] = new DijkstraData { Price = 0, PreviousInCell = new Point(-1, -1) }
+            };
+
+            var directions = new[] { new Point(0, 1), new Point(0, -1), new Point(1, 0), new Point(-1, 0) };
+            var chests = targets.ToList();
+
+            foreach (var element in DoDijkstra(state, notVisit, road, chests, directions))
+                yield return element;
+        }
+
+        private static List<Point> GetNeighbours(Point point, State state, Point[] directions)
+        {
+            var neighbours = new List<Point>();
+            foreach (var direction in directions)
+            {
+                var neighbour = new Point(direction.X + point.X, direction.Y + point.Y );
+                if (state.InsideMap(neighbour) && !(state.IsWallAt(neighbour)))
+                    neighbours.Add(neighbour);
+            }
+            return neighbours;
+        }
+
+        public static IEnumerable<PathWithCost> GetPathWithPoints(List<Point> chests, Point toOpen, Dictionary<Point, DijkstraData> road)//бэктрекинг
+        {
+            var ways = new List<PathWithCost>();
+            if (chests.Contains(toOpen)) 
+            {
+                chests.Remove(toOpen);
+                var roadToChest = new List<Point>();
+                var target = toOpen;
+                while (!(Equals(target, new Point(-1, -1))))
+                {
+                    roadToChest.Add(target);
+                    target = road[target].PreviousInCell;
+                }
+
+                roadToChest.Reverse();
+                ways.Add(new PathWithCost((int)road[toOpen].Price, roadToChest.ToArray()));
+                if (Equals(chests.Count, 0)) return ways;
+            }
+            return ways;
+        }  
+    }
+}
